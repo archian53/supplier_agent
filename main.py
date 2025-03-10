@@ -8,7 +8,6 @@ from ai_processor import AIProcessor
 from data_validator import DataValidator
 from logger_config import logger
 import os
-import socket
 import sys
 
 app = FastAPI()
@@ -32,17 +31,6 @@ class ProductRequest(BaseModel):
     supplier_name: str
     product_name: str
     table_name: str = "supplier_products"
-
-def find_free_port(start_port: int = 5000, max_attempts: int = 10) -> int:
-    """Find a free port starting from start_port"""
-    for port in range(start_port, start_port + max_attempts):
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('0.0.0.0', port))
-                return port
-        except OSError:
-            continue
-    raise RuntimeError(f"Could not find a free port in range {start_port}-{start_port + max_attempts}")
 
 @app.on_event("startup")
 async def startup_event():
@@ -136,9 +124,9 @@ async def generate_entry(request: ProductRequest):
 
 if __name__ == "__main__":
     try:
-        port = find_free_port()
-        logger.info(f"Starting server on port {port}")
-        uvicorn.run(app, host="0.0.0.0", port=port)
+        PORT = 8000  # Use port 8000 instead of 5000
+        logger.info(f"Starting server on port {PORT}")
+        uvicorn.run(app, host="0.0.0.0", port=PORT)
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
         sys.exit(1)

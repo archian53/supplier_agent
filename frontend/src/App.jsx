@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 function App() {
   const [supplierName, setSupplierName] = useState('');
@@ -26,15 +26,33 @@ function App() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [existingData, setExistingData] = useState([]);
+  const [serverConnected, setServerConnected] = useState(false);
 
   useEffect(() => {
-    fetchExistingData();
+    checkServerConnection();
   }, []);
+
+  const checkServerConnection = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/health`);
+      if (response.data.status === 'healthy') {
+        setServerConnected(true);
+        fetchExistingData();
+      }
+    } catch (err) {
+      setError('Unable to connect to server. Please try again later.');
+      console.error('Server connection error:', err);
+    }
+  };
 
   const fetchExistingData = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/data/SUPPLIER_PRODUCTS`);
-      setExistingData(response.data.data);
+      const response = await axios.get(`${API_BASE_URL}/data/supplier_products`);
+      if (response.data.status === 'success') {
+        setExistingData(response.data.data);
+      } else {
+        throw new Error(response.data.message || 'Failed to load data');
+      }
     } catch (err) {
       setError('Failed to load existing data');
       console.error('Error fetching data:', err);
@@ -43,6 +61,11 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!serverConnected) {
+      setError('Server connection not available');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -51,14 +74,14 @@ function App() {
       const response = await axios.post(`${API_BASE_URL}/generate-entry`, {
         supplier_name: supplierName,
         product_name: productName,
-        table_name: 'SUPPLIER_PRODUCTS'
+        table_name: 'supplier_products'
       });
 
       if (response.data.status === 'success') {
         setSuccess('Entry generated and inserted successfully');
         setSupplierName('');
         setProductName('');
-        fetchExistingData();
+        await fetchExistingData();
       } else {
         setError('Failed to generate entry: ' + response.data.message);
       }
@@ -68,6 +91,22 @@ function App() {
       setLoading(false);
     }
   };
+
+  if (!serverConnected) {
+    return (
+      <Container maxWidth="lg">
+        <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <CircularProgress sx={{ mb: 2 }} />
+          <Typography>Connecting to server...</Typography>
+          {error && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {error}
+            </Alert>
+          )}
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg">
@@ -131,7 +170,7 @@ function App() {
                 <TableRow>
                   <TableCell>Supplier Name</TableCell>
                   <TableCell>Product Name</TableCell>
-                  {existingData[0] && 
+                  {existingData[0] &&
                     Object.keys(existingData[0])
                       .filter(key => !['supplier_name', 'product_name'].includes(key))
                       .map(key => (
