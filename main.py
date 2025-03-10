@@ -1,20 +1,22 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Optional
 import uvicorn
 from database_connector import DatabaseConnector
 from web_scraper import WebScraper
 from ai_processor import AIProcessor
 from data_validator import DataValidator
-import logging
+from logger_config import logger
+import os
+import socket
+import sys
 
 app = FastAPI()
 
-# Enable CORS
+# Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["http://localhost:3000", "http://0.0.0.0:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,13 +33,30 @@ class ProductRequest(BaseModel):
     product_name: str
     table_name: str = "supplier_products"
 
+def find_free_port(start_port: int = 5000, max_attempts: int = 10) -> int:
+    """Find a free port starting from start_port"""
+    for port in range(start_port, start_port + max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('0.0.0.0', port))
+                return port
+        except OSError:
+            continue
+    raise RuntimeError(f"Could not find a free port in range {start_port}-{start_port + max_attempts}")
+
 @app.on_event("startup")
 async def startup_event():
     global db
     try:
         db = DatabaseConnector()
+        logger.info("Database connection initialized successfully")
     except Exception as e:
-        logging.error(f"Failed to initialize database connection: {e}")
+        logger.error(f"Failed to initialize database connection: {e}")
+        raise
+
+@app.get("/")
+async def root():
+    return {"status": "healthy", "message": "FastAPI server is running"}
 
 @app.get("/api/health")
 async def health_check():
@@ -49,8 +68,9 @@ async def get_table_data(table_name: str):
         if not db:
             raise HTTPException(status_code=503, detail="Database connection not available")
         data = db.get_table_data(table_name)
-        return {"data": data.to_dict('records')}
+        return {"status": "success", "data": data.to_dict('records')}
     except Exception as e:
+        logger.error(f"Error fetching data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/generate-entry")
@@ -111,7 +131,14 @@ async def generate_entry(request: ProductRequest):
             }
 
     except Exception as e:
+        logger.error(f"Error generating entry: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
+    try:
+        port = find_free_port()
+        logger.info(f"Starting server on port {port}")
+        uvicorn.run(app, host="0.0.0.0", port=port)
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        sys.exit(1)
