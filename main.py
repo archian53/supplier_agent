@@ -124,9 +124,8 @@ async def generate_entry(request: ProductRequest):
 
 if __name__ == "__main__":
     try:
-        PORT = 8000  # Use port 8000 instead of 5000
-        logger.info(f"Starting server on port {PORT}")
-        uvicorn.run(app, host="0.0.0.0", port=PORT)
+        logger.info("Starting server on port 5000")
+        uvicorn.run(app, host="0.0.0.0", port=5000)
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
         sys.exit(1)
